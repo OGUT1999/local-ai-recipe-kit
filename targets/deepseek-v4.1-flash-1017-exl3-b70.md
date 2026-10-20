@@ -39,6 +39,20 @@
 - The model has no reference panel in this kit and no other machine was used as a reference: `quality.panel` is null, so `validate.py`
   rejects the submission on that single point (recorded in the PR).
 
+## DSpark (bundled mtp.0-2 drafter) — measured, not part of this config
+The checkpoint's draft (3 stages: fp8 attention, router, 128 MXFP4 experts top-3, markov + confidence heads) was ported far enough to run
+on XPU end to end (draft load, graphs, M=6 verify through the mixed-K cached MoE kernel; the target's output stays correct). Measured on the full
+model: **1.04 tok/s, accept length 1.00-1.02** versus 11.8 tok/s without it, so it is off. Causes: the draft's proposals are wrong (still open;
+the draft linears were first loaded without their fp8 block scales, fixed, acceptance unchanged) and its MXFP4 MoE is a torch dequant + bf16
+matmul per (token, slot) pair, ~1 s per step. Misses per token do not fall with verify width on this offload design, so even a correct draft
+could only amortise the non-MoE ~30 ms. Code paths stay inert unless `--speculative-algorithm DSPARK` is passed and are not in the image.
+
+## Other runs on this machine (kept for honesty)
+- Image `206339e7…` (chunk 8192, no deep-chunk budget): prefill 412/412/403/385 tok/s, decode C1 11.6, C2 11.9, C3 11.8, C4 11.8, C1@32k 11.8;
+  its 250k needle ran out of memory (640 MiB allocation, 572 MiB free) — the cause of the later row-chunk/deep-chunk changes.
+- Image `c3474850…` (chunk 4096): prefill 270-275 tok/s at 8k/16k/32k (aborted run) — prefill is chunk-bound (each chunk streams/reconstructs every
+  active expert), which is why the submitted config uses 8192.
+
 ## Safe knobs to tune
 `X3_CACHE_GB` (decode speed: 14 GB 11.1, 17 GB 11.8-12.7, 20 GB ~13.2, 22 GB 14.4 tok/s on short prompts; above ~17 GB long prompts OOM
 during prefill), `--chunked-prefill-size` (4096: 272 tok/s prefill, 8192: 410; 16384 does not fit with a 17 GB cache),
