@@ -25,8 +25,12 @@
 ### 4x RTX PRO 6000 Blackwell Workstation (sm_120) — `4x-rtx-pro-6000-96gb`
 - Image: `ghcr.io/sybil-solutions/vllm-moet-dsv41-engramdisk@sha256:f3d7a175e8ccb89507ca66974386e724734d0e7ed0080d21d5518daf88aca6bd`
   (rebuild: `docker build -f Dockerfile.sm120-dsv41-nightly -t vllm-moet-sm120:dsv41-nightly-df3bd094-r13 .` in
-  vLLM-Moet `5d25cff`, then the `engram_disk` layer `FROM` it).
-- Launch (`--gpus all --ipc host --shm-size 32g`; upstream also passes `--ulimit memlock=-1:-1 --ulimit stack=67108864`,
+  vLLM-Moet `5d25cff`, then `docker build -t vllm-moet-sm120:dsv41-nightly-df3bd094-r13-engramdisk
+  images/deepseek-v4.1-flash-engramdisk` from this repo: the `engram_disk` layer's source, Dockerfile and test).
+- One command, the measured container (same flags, values and env as the run in the submission; it refuses to start
+  over a stale `/dev/shm` offload region or a `/dev/shm` too small for the offload):
+  `MODEL_DIR=<checkpoint> CACHE_DIR=<cache dir> images/deepseek-v4.1-flash-engramdisk/serve.sh`
+- Launch, spelled out (`--gpus all --ipc host`; upstream also passes `--ulimit memlock=-1:-1 --ulimit stack=67108864`,
   the measured container ran without them,
   `-v <models dir>/DeepSeek-V4.1-Flash-1017:/models:ro -v <cache dir>/dot-cache:/root/.cache
   -v <cache dir>/deep_gemm:/root/.deep_gemm -v <kv cache dir>:/srv/kvcache`; the image's entrypoint is `vllm serve`):
